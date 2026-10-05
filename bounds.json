@@ -1,0 +1,14 @@
+{
+  "position": {
+    "xPosition": "StartToStart",
+    "xOffset": 0,
+    "xRelativeTo": "Player",
+    "yPosition": "TopToTop",
+    "yOffset": 0,
+    "yRelativeTo": "Player"
+  },
+  "size": {
+    "widthRatio": 1,
+    "heightRatio": 1
+  }
+}
