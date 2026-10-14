@@ -1,11 +1,3 @@
-/**
- * IIHF WSC custom enrichment overlay — player story card.
- *
- * Host this file on a public URL (no CORS block) and give WSC Sports that URL
- * plus bounds.json. The Flutter app does not pass this URL into the player.
- *
- * Contract: https://dev.wsc-sports.com/docs/create-a-custom-enrichment-file
- */
 
 const DEFAULTS = {
   playerName: 'Mikko Lehtonen',
@@ -13,10 +5,7 @@ const DEFAULTS = {
   goals: '14',
   assists: '2',
   points: '18',
-  homeScore: '4',
-  awayScore: '2',
-  homeFlagCode: 'FIN',
-  awayFlagCode: 'USA',
+  playerFlagCode: 'FIN',
   pageCount: 4,
   activePage: 1,
 };
@@ -51,14 +40,8 @@ function readContext(context) {
     goals: user.goals != null ? String(user.goals) : DEFAULTS.goals,
     assists: user.assists != null ? String(user.assists) : DEFAULTS.assists,
     points: user.points != null ? String(user.points) : DEFAULTS.points,
-    homeScore: user.homeScore != null ? String(user.homeScore) : DEFAULTS.homeScore,
-    awayScore: user.awayScore != null ? String(user.awayScore) : DEFAULTS.awayScore,
-    homeFlagCode: (user.homeFlagCode || DEFAULTS.homeFlagCode).toUpperCase(),
-    awayFlagCode: (user.awayFlagCode || DEFAULTS.awayFlagCode).toUpperCase(),
-    homeFlagUrl: isHttpUrl(user.homeFlagUrl) ? user.homeFlagUrl.trim() : '',
-    awayFlagUrl: isHttpUrl(user.awayFlagUrl) ? user.awayFlagUrl.trim() : '',
     playerFlagUrl: isHttpUrl(user.playerFlagUrl) ? user.playerFlagUrl.trim() : '',
-    playerFlagCode: (user.playerFlagCode || user.homeFlagCode || DEFAULTS.homeFlagCode).toUpperCase(),
+    playerFlagCode: (user.playerFlagCode || DEFAULTS.playerFlagCode).toUpperCase(),
     fontUrl: isHttpUrl(user.fontUrl) ? user.fontUrl.trim() : '',
     pageCount,
     activePage,
@@ -157,99 +140,6 @@ export async function renderEnrichment(context) {
         window.iihfStoryOverlay_onVote();
       });
     }
-
-    let currentPage = data.activePage;
-    const pageCount = data.pageCount;
-    const swipeLayer = root.getElementById('iihf-swipe-layer');
-    const pager = root.getElementById('iihf-pager');
-    const swipeState = { tracking: false, startX: 0, startY: 0, pointerId: null };
-
-    function updatePager(page) {
-      if (!pager) {
-        return;
-      }
-      const dots = pager.querySelectorAll('.pager-dot');
-      for (let i = 0; i < dots.length; i += 1) {
-        const isActive = i + 1 === page;
-        dots[i].classList.toggle('is-active', isActive);
-        if (isActive) {
-          dots[i].setAttribute('aria-current', 'true');
-        } else {
-          dots[i].removeAttribute('aria-current');
-        }
-      }
-    }
-
-    function controlPlayer(command, payload) {
-      if (typeof window.triggerExternalFunction !== 'function') {
-        return;
-      }
-      if (payload === undefined) {
-        window.triggerExternalFunction(command);
-      } else {
-        window.triggerExternalFunction(command, payload);
-      }
-    }
-
-    function goToAdjacent(direction) {
-      const command = direction > 0 ? 'goToNextPage' : 'goToPreviousPage';
-      controlPlayer(command);
-      const nextPage = currentPage + direction;
-      if (nextPage >= 1 && nextPage <= pageCount) {
-        currentPage = nextPage;
-        updatePager(currentPage);
-      }
-    }
-
-    window.iihfStoryOverlay_goToNextPage = function iihfStoryOverlay_goToNextPage() {
-      goToAdjacent(1);
-    };
-
-    window.iihfStoryOverlay_goToPreviousPage = function iihfStoryOverlay_goToPreviousPage() {
-      goToAdjacent(-1);
-    };
-
-    function onPointerDown(event) {
-      swipeState.tracking = true;
-      swipeState.startX = event.clientX;
-      swipeState.startY = event.clientY;
-      swipeState.pointerId = event.pointerId;
-      if (swipeLayer && swipeLayer.setPointerCapture) {
-        try {
-          swipeLayer.setPointerCapture(event.pointerId);
-        } catch (e) {}
-      }
-    }
-
-    function onPointerUp(event) {
-      if (!swipeState.tracking) {
-        return;
-      }
-      if (swipeState.pointerId != null && event.pointerId !== swipeState.pointerId) {
-        return;
-      }
-      swipeState.tracking = false;
-      const dx = event.clientX - swipeState.startX;
-      const dy = event.clientY - swipeState.startY;
-      if (Math.abs(dx) < 48 || Math.abs(dx) <= Math.abs(dy)) {
-        return;
-      }
-      if (dx < 0) {
-        goToAdjacent(1);
-      } else {
-        goToAdjacent(-1);
-      }
-    }
-
-    function onPointerCancel() {
-      swipeState.tracking = false;
-    }
-
-    if (swipeLayer) {
-      swipeLayer.addEventListener('pointerdown', onPointerDown);
-      swipeLayer.addEventListener('pointerup', onPointerUp);
-      swipeLayer.addEventListener('pointercancel', onPointerCancel);
-    }
   };
 
   const fontLoader = data.fontUrl
@@ -276,93 +166,17 @@ export async function renderEnrichment(context) {
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: 5% 0 0;
+    justify-content: flex-end;
     color: #ffffff;
     pointer-events: none;
-    position: relative;
   }
   .overlay-root *, .overlay-root *::before, .overlay-root *::after {
     box-sizing: border-box;
   }
-  .scrim-top, .scrim-bottom {
-    position: absolute;
-    left: 0;
-    right: 0;
-    pointer-events: none;
-  }
-  .scrim-top {
-    top: 0;
-    height: 28%;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
-  }
-  .scrim-bottom {
-    bottom: 0;
-    height: 42%;
-    background: linear-gradient(0deg, rgba(5, 31, 75, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
-  }
-  .swipe-layer, .top-bar, .pager, .player-card, .close-btn, .vote-btn, .score-chip {
+  .pager, .vote-btn {
     pointer-events: auto;
   }
-  .swipe-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    touch-action: pan-y;
-  }
-  .top-bar {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0 4%;
-  }
-  .score-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.5rem;
-    background: rgba(255, 255, 255, 0.30);
-    border: 1px solid rgba(255, 255, 255, 0.20);
-    border-radius: 1.875rem;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-  }
-  .score-text {
-    min-width: 1.5rem;
-    text-align: center;
-    color: #04193C;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1rem;
-    letter-spacing: 0.5px;
-  }
-  .close-btn {
-    width: 1.5rem;
-    height: 1.5rem;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: #C0C1C9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .close-btn svg {
-    width: 1.25rem;
-    height: 1.25rem;
-    display: block;
-  }
-  .mid-space {
-    flex: 1 1 auto;
-    min-height: 2rem;
-    pointer-events: none;
-  }
   .pager {
-    position: relative;
-    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -387,8 +201,6 @@ export async function renderEnrichment(context) {
     background: #2E2EE5;
   }
   .player-card {
-    position: relative;
-    z-index: 2;
     width: 100%;
     display: flex;
     align-items: center;
@@ -555,22 +367,6 @@ export async function renderEnrichment(context) {
   }
 </style>
 <div class="overlay-root" role="region" aria-label="Player story overlay">
-  <div class="swipe-layer" id="iihf-swipe-layer"></div>
-  <div class="scrim-top"></div>
-  <div class="scrim-bottom"></div>
-  <div class="top-bar">
-    <div class="score-chip">
-      ${flagMarkup(data.homeFlagCode, data.homeFlagUrl)}
-      <span class="score-text">${escapeHtml(data.homeScore)}:${escapeHtml(data.awayScore)}</span>
-      ${flagMarkup(data.awayFlagCode, data.awayFlagUrl)}
-    </div>
-    <button class="close-btn" type="button" aria-label="Close" tabindex="-1">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M6.4 19L5 17.6L10.6 12L5 6.4L6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19Z" fill="currentColor"/>
-      </svg>
-    </button>
-  </div>
-  <div class="mid-space"></div>
   ${pagerMarkup(data.pageCount, data.activePage)}
   <div class="player-card">
     <div class="player-identity">
