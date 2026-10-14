@@ -3,12 +3,12 @@
     "xPosition": "StartToStart",
     "xOffset": 0,
     "xRelativeTo": "Player",
-    "yPosition": "TopToTop",
+    "yPosition": "BottomToBottom",
     "yOffset": 0,
     "yRelativeTo": "Player"
   },
   "size": {
     "widthRatio": 1,
-    "heightRatio": 1
+    "absoluteHeight": 168
   }
 }
