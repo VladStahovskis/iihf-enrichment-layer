@@ -1,6 +1,6 @@
 
 const DEFAULTS = {
-  playerName: 'Mario Johnson',
+  playerName: 'Mikko Lehtonen',
   photoUrl: '',
   goals: '14',
   assists: '2',
@@ -392,7 +392,7 @@ export async function renderEnrichment(context) {
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M9 21H18.2C18.83 21 19.4 20.63 19.68 20.06L22.78 12.95C22.93 12.63 23 12.32 23 12V10C23 8.9 22.1 8 21 8H14.69L15.64 3.43L15.67 3.11C15.67 2.7 15.5 2.32 15.23 2.05L14.17 1L7.59 7.59C7.22 7.95 7 8.45 7 9V19C7 20.1 7.9 21 9 21ZM9 9L13.34 4.66L12 10H21V12L18.2 19H9V9ZM1 9H5V21H1V9Z" fill="currentColor"/>
         </svg>
-        <span class="vote-label">Vote for</span>
+        <span class="vote-label">Vote</span>
       </button>
     </div>
   </div>
