@@ -1,6 +1,6 @@
 
 const DEFAULTS = {
-  playerName: 'Mikko Lehtonen',
+  playerName: 'Mario Smith',
   photoUrl: '',
   goals: '14',
   assists: '2',
@@ -94,17 +94,28 @@ export async function renderEnrichment(context) {
   const userContext = data.user;
 
   window.iihfStoryOverlay_onVote = function iihfStoryOverlay_onVote() {
-    const payload = Object.assign({}, userContext, {
-      iihfVote: {
-        action: 'vote',
-        playerId: data.sdk.playerId,
-        teamId: data.sdk.teamId,
-        gameId: data.sdk.gameId,
-        roundId: data.sdk.roundId,
-        seasonId: data.sdk.seasonId,
-        playerName: data.playerName,
-        ts: Date.now(),
-      },
+    // The native SDK parses setAppContext as Map<String, String> (Gson) and then
+    // replaces hostingAppContext with it. Nested objects/arrays/booleans make
+    // parsing fail silently, so every value must be a string. The vote is sent
+    // as a JSON string; the Flutter app jsonDecodes it.
+    const payload = {};
+    Object.keys(userContext || {}).forEach(function (key) {
+      const value = userContext[key];
+      if (value === null || value === undefined) {
+        return;
+      }
+      payload[key] =
+        typeof value === 'object' ? JSON.stringify(value) : String(value);
+    });
+    payload.iihfVote = JSON.stringify({
+      action: 'vote',
+      playerId: data.sdk.playerId,
+      teamId: data.sdk.teamId,
+      gameId: data.sdk.gameId,
+      roundId: data.sdk.roundId,
+      seasonId: data.sdk.seasonId,
+      playerName: data.playerName,
+      ts: Date.now(),
     });
 
     if (typeof window.triggerExternalFunction === 'function') {
