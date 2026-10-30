@@ -350,19 +350,26 @@ export async function renderEnrichment(context) {
     font-family: IIHF, "IIHF-Std", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   :host {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    width: 100%;
+    /* Matches bounds.json absoluteHeight. The shadow host otherwise
+       shrinks to the card and sits at the top of that strip. */
+    height: 168px;
+    margin: 0;
     background: transparent;
+    pointer-events: none;
   }
   .overlay-root {
     box-sizing: border-box;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
     width: 100%;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    margin: 0;
     color: #ffffff;
     pointer-events: none;
     background: transparent;
@@ -370,7 +377,7 @@ export async function renderEnrichment(context) {
   .overlay-root *, .overlay-root *::before, .overlay-root *::after {
     box-sizing: border-box;
   }
-  .pager, .vote-btn {
+  .vote-btn {
     pointer-events: auto;
   }
   .pager {
