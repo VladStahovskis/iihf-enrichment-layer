@@ -1,15 +1,4 @@
 
-const DEFAULTS = {
-  playerName: 'Mario Smith',
-  photoUrl: '',
-  goals: '14',
-  assists: '2',
-  points: '18',
-  playerFlagCode: 'FIN',
-  pageCount: 4,
-  activePage: 1,
-};
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -19,36 +8,171 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function nonempty(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function firstNonempty(values) {
+  for (let i = 0; i < values.length; i += 1) {
+    const text = nonempty(values[i]);
+    if (text) return text;
+  }
+  return '';
+}
+
 function isHttpUrl(value) {
-  return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+  return /^https?:\/\//i.test(nonempty(value));
+}
+
+function httpUrl(value) {
+  const text = nonempty(value);
+  return isHttpUrl(text) ? text : '';
+}
+
+function readCandidates(raw) {
+  if (!raw) return [];
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object');
+}
+
+function sameId(left, right) {
+  const a = nonempty(left);
+  const b = nonempty(right);
+  return a !== '' && a === b;
+}
+
+function matchCandidate(candidates, playerIds, pageIds) {
+  for (let i = 0; i < playerIds.length; i += 1) {
+    const byPlayer = candidates.find((item) => sameId(item.playerId, playerIds[i]));
+    if (byPlayer) return byPlayer;
+  }
+  for (let i = 0; i < pageIds.length; i += 1) {
+    const byPage = candidates.find((item) => sameId(item.pageId, pageIds[i]));
+    if (byPage) return byPage;
+  }
+  return null;
+}
+
+function titleCaseName(raw) {
+  const trimmed = nonempty(raw);
+  if (!trimmed) return '';
+  return trimmed.split(/\s+/).map(titleCaseToken).join(' ');
+}
+
+function titleCaseToken(token) {
+  return token
+    .split('-')
+    .map((part) => {
+      if (!part) return part;
+      const hasLower = /[a-z]/.test(part);
+      const hasUpper = /[A-Z]/.test(part);
+      if (!hasUpper || hasLower) return part;
+      const lower = part.toLowerCase();
+      return lower[0].toUpperCase() + lower.slice(1);
+    })
+    .join('-');
+}
+
+function layerWith(layers, key) {
+  for (let i = 0; i < layers.length; i += 1) {
+    const layer = layers[i];
+    if (layer && nonempty(layer[key])) return layer;
+  }
+  return null;
+}
+
+function displayName(givenName, familyName, playerName) {
+  const joined = [titleCaseName(givenName), titleCaseName(familyName)]
+    .filter(Boolean)
+    .join(' ');
+  if (joined) return joined;
+  return titleCaseName(playerName);
+}
+
+function positionLabel(position) {
+  switch (nonempty(position).toUpperCase()) {
+    case 'F':
+      return 'Forward';
+    case 'D':
+      return 'Defender';
+    case 'G':
+    case 'GK':
+      return 'Goaltender';
+    default:
+      return nonempty(position);
+  }
+}
+
+function present(source, key) {
+  return !!source && source[key] !== null && source[key] !== undefined && source[key] !== '';
+}
+
+function optionalCount(sdk, user, key) {
+  const source = present(sdk, key) ? sdk : present(user, key) ? user : null;
+  if (!source) return null;
+  const count = Number(source[key]);
+  if (!Number.isFinite(count) || count < 1) return null;
+  return Math.floor(count);
 }
 
 function readContext(context) {
   const sdk = (context && context.sdkContext) || {};
   const user = (context && context.userContext) || {};
-  const pageCount = Math.max(1, Number(user.pageCount) || DEFAULTS.pageCount);
-  const activePage = Math.min(
-    pageCount,
-    Math.max(1, Number(user.activePage) || DEFAULTS.activePage),
+  const candidates = readCandidates(user.goalCandidates ?? sdk.goalCandidates);
+  const matched = matchCandidate(
+    candidates,
+    [sdk.playerId, user.playerId],
+    [sdk.pageId, user.pageId],
   );
+  const layers = [sdk, user, matched || {}];
+
+  function field(key) {
+    return firstNonempty(layers.map((layer) => layer && layer[key]));
+  }
+
+  const givenName = field('givenName');
+  const familyName = field('familyName');
+  const nameLayer = layerWith(layers, 'givenName')
+    || layerWith(layers, 'familyName')
+    || layerWith(layers, 'playerName');
+  const pollPlayerId = firstNonempty([
+    nameLayer && nameLayer.playerId,
+    user.playerId,
+    matched && matched.playerId,
+  ]);
+
+  const pageCount = optionalCount(sdk, user, 'pageCount');
+  const activePage = pageCount
+    ? Math.min(pageCount, Math.max(1, optionalCount(sdk, user, 'activePage') || 1))
+    : 0;
 
   return {
     sdk,
     user,
-    playerName: user.playerName || DEFAULTS.playerName,
-    photoUrl: isHttpUrl(user.photoUrl) ? user.photoUrl.trim() : DEFAULTS.photoUrl,
-    goals: user.goals != null ? String(user.goals) : DEFAULTS.goals,
-    assists: user.assists != null ? String(user.assists) : DEFAULTS.assists,
-    points: user.points != null ? String(user.points) : DEFAULTS.points,
-    playerFlagUrl: isHttpUrl(user.playerFlagUrl) ? user.playerFlagUrl.trim() : '',
-    playerFlagCode: (user.playerFlagCode || DEFAULTS.playerFlagCode).toUpperCase(),
-    fontUrl: isHttpUrl(user.fontUrl) ? user.fontUrl.trim() : '',
+    pollPlayerId,
+    playerName: displayName(givenName, familyName, field('playerName')),
+    photoUrl: httpUrl(field('portraitUrl')) || httpUrl(field('photoUrl')),
+    jerseyNumber: field('jerseyNumber').replace(/^#/, ''),
+    positionLabel: positionLabel(field('position')),
+    playerFlagUrl: httpUrl(field('playerFlagUrl')),
+    playerFlagCode: (field('teamCode') || field('playerFlagCode')).toUpperCase(),
+    fontUrl: httpUrl(field('fontUrl')),
     pageCount,
     activePage,
   };
 }
 
 function flagMarkup(code, imageUrl, extraClass) {
+  if (!imageUrl && !code) return '';
   const cls = extraClass ? `flag-circle ${extraClass}` : 'flag-circle';
   if (imageUrl) {
     return `<img class="${cls} flag-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(code)}" />`;
@@ -73,6 +197,7 @@ function initials(name) {
 }
 
 function pagerMarkup(pageCount, activePage) {
+  if (!pageCount) return '';
   let dots = '';
   for (let i = 1; i <= pageCount; i += 1) {
     const active = i === activePage;
@@ -87,6 +212,14 @@ function avatarMarkup(data) {
     : `<div class="avatar-fallback">${escapeHtml(initials(data.playerName))}</div>`;
   const flag = flagMarkup(data.playerFlagCode, data.playerFlagUrl, 'player-flag');
   return `<div class="avatar-wrap">${photo}${flag}</div>`;
+}
+
+function metaMarkup(data) {
+  const jersey = data.jerseyNumber ? `#${data.jerseyNumber}` : '';
+  const position = data.positionLabel;
+  if (!jersey && !position) return '';
+  const dot = jersey && position ? '<span class="meta-dot" aria-hidden="true"></span>' : '';
+  return `<div class="meta-line">${jersey ? `<span class="meta-text">${escapeHtml(jersey)}</span>` : ''}${dot}${position ? `<span class="meta-text">${escapeHtml(position)}</span>` : ''}</div>`;
 }
 
 export async function renderEnrichment(context) {
@@ -109,7 +242,7 @@ export async function renderEnrichment(context) {
     });
     payload.iihfVote = JSON.stringify({
       action: 'vote',
-      playerId: data.sdk.playerId,
+      playerId: data.pollPlayerId || data.sdk.playerId,
       teamId: data.sdk.teamId,
       gameId: data.sdk.gameId,
       roundId: data.sdk.roundId,
@@ -271,6 +404,9 @@ export async function renderEnrichment(context) {
     letter-spacing: 0.1px;
     text-align: center;
     width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .player-meta {
     display: flex;
@@ -281,33 +417,30 @@ export async function renderEnrichment(context) {
     flex: 0 1 11.5rem;
     min-width: 0;
   }
-  .stats-row {
+  .meta-line {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-  .stat {
-    display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
-    flex: 1 1 0;
-  }
-  .stat-label {
+    min-width: 0;
+    min-height: 1rem;
     color: #C0C1C9;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1rem;
-    letter-spacing: 0.5px;
-  }
-  .stat-value {
-    color: #ffffff;
-    font-size: 1rem;
+    font-size: 0.75rem;
     font-weight: 400;
-    line-height: 1.5rem;
-    letter-spacing: 0.5px;
+    line-height: 1rem;
+    letter-spacing: 0.4px;
+  }
+  .meta-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meta-dot {
+    width: 0.25rem;
+    height: 0.25rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.20);
+    flex-shrink: 0;
   }
   .vote-btn {
     display: flex;
@@ -385,20 +518,7 @@ export async function renderEnrichment(context) {
       <div class="player-name">${escapeHtml(data.playerName)}</div>
     </div>
     <div class="player-meta">
-      <div class="stats-row">
-        <div class="stat">
-          <span class="stat-label">Goals</span>
-          <span class="stat-value">${escapeHtml(data.goals)}</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Assists</span>
-          <span class="stat-value">${escapeHtml(data.assists)}</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Points</span>
-          <span class="stat-value">${escapeHtml(data.points)}</span>
-        </div>
-      </div>
+      ${metaMarkup(data)}
       <button id="iihf-vote-btn" class="vote-btn" type="button">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M9 21H18.2C18.83 21 19.4 20.63 19.68 20.06L22.78 12.95C22.93 12.63 23 12.32 23 12V10C23 8.9 22.1 8 21 8H14.69L15.64 3.43L15.67 3.11C15.67 2.7 15.5 2.32 15.23 2.05L14.17 1L7.59 7.59C7.22 7.95 7 8.45 7 9V19C7 20.1 7.9 21 9 21ZM9 9L13.34 4.66L12 10H21V12L18.2 19H9V9ZM1 9H5V21H1V9Z" fill="currentColor"/>
