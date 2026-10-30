@@ -50,16 +50,39 @@ function sameId(left, right) {
   return a !== '' && a === b;
 }
 
-function matchCandidate(candidates, playerIds, pageIds) {
-  for (let i = 0; i < playerIds.length; i += 1) {
-    const byPlayer = candidates.find((item) => sameId(item.playerId, playerIds[i]));
-    if (byPlayer) return byPlayer;
-  }
-  for (let i = 0; i < pageIds.length; i += 1) {
-    const byPage = candidates.find((item) => sameId(item.pageId, pageIds[i]));
-    if (byPage) return byPage;
+function matchByKey(candidates, key, ids) {
+  for (let i = 0; i < ids.length; i += 1) {
+    const found = candidates.find((item) => sameId(item[key], ids[i]));
+    if (found) return found;
   }
   return null;
+}
+
+function objectLayer(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value;
+}
+
+// WSC page extra info may sit on sdkContext itself, or under current /
+// extraInfo.current. Page id wins, then the page's player id.
+function pageCandidate(candidates, sdk) {
+  const extra = objectLayer(sdk.extraInfo);
+  const contentExtra = objectLayer(sdk.contentExtraInfo);
+  const page = objectLayer(sdk.current)
+    || objectLayer(sdk.story_page_content_extra_info)
+    || objectLayer(sdk.storyPageContentExtraInfo)
+    || (extra && objectLayer(extra.current))
+    || (contentExtra && objectLayer(contentExtra.current))
+    || {};
+  return matchByKey(candidates, 'pageId', [
+    page.pageId,
+    sdk.pageId,
+    sdk.story_page_id,
+    sdk.storyPageId,
+  ]) || matchByKey(candidates, 'playerId', [
+    page.playerId,
+    sdk.playerId,
+  ]);
 }
 
 function titleCaseName(raw) {
@@ -128,12 +151,13 @@ function readContext(context) {
   const sdk = (context && context.sdkContext) || {};
   const user = (context && context.userContext) || {};
   const candidates = readCandidates(user.goalCandidates ?? sdk.goalCandidates);
-  const matched = matchCandidate(
-    candidates,
-    [sdk.playerId, user.playerId],
-    [sdk.pageId, user.pageId],
-  );
-  const layers = [sdk, user, matched || {}];
+  // The flat user fields belong to the page that opened the story. A later
+  // page only changes sdkContext ids, so the candidate for those ids has to
+  // win or the card stays on the first player.
+  const onPage = pageCandidate(candidates, sdk);
+  const opened = matchByKey(candidates, 'pageId', [user.pageId])
+    || matchByKey(candidates, 'playerId', [user.playerId]);
+  const layers = onPage ? [sdk, onPage, user] : [sdk, user, opened || {}];
 
   function field(key) {
     return firstNonempty(layers.map((layer) => layer && layer[key]));
@@ -144,6 +168,7 @@ function readContext(context) {
   const nameLayer = layerWith(layers, 'givenName')
     || layerWith(layers, 'familyName')
     || layerWith(layers, 'playerName');
+  const matched = onPage || opened;
   const pollPlayerId = firstNonempty([
     nameLayer && nameLayer.playerId,
     user.playerId,
@@ -164,6 +189,9 @@ function readContext(context) {
     jerseyNumber: field('jerseyNumber').replace(/^#/, ''),
     positionLabel: positionLabel(field('position')),
     playerFlagUrl: httpUrl(field('playerFlagUrl')),
+    goals: field('goals'),
+    assists: field('assists'),
+    points: field('points'),
     playerFlagCode: (field('teamCode') || field('playerFlagCode')).toUpperCase(),
     fontUrl: httpUrl(field('fontUrl')),
     pageCount,
@@ -171,17 +199,39 @@ function readContext(context) {
   };
 }
 
+// IIHF team codes are not all ISO alpha-2. flagcdn serves the circular crop.
+const TEAM_ISO2 = {
+  ALG: 'dz', ARG: 'ar', ARM: 'am', AUS: 'au', AUT: 'at', AZE: 'az',
+  BEL: 'be', BHR: 'bh', BIH: 'ba', BLR: 'by', BRA: 'br', BUL: 'bg',
+  CAN: 'ca', CHI: 'cl', CHN: 'cn', COL: 'co', CZE: 'cz',
+  DEN: 'dk', ESP: 'es', EST: 'ee', FIN: 'fi', FRA: 'fr',
+  GBR: 'gb', GEO: 'ge', GER: 'de', GRE: 'gr',
+  HKG: 'hk', HUN: 'hu', INA: 'id', IND: 'in', IRI: 'ir', IRL: 'ie',
+  ISL: 'is', ISR: 'il', ITA: 'it', JAM: 'jm', JPN: 'jp',
+  KEN: 'ke', KGZ: 'kg', KOR: 'kr', KUW: 'kw',
+  LAT: 'lv', LIE: 'li', LTU: 'lt', LUX: 'lu',
+  MAC: 'mo', MAR: 'ma', MAS: 'my', MDA: 'md', MEX: 'mx', MKD: 'mk',
+  MGL: 'mn', NED: 'nl', NEP: 'np', NOR: 'no', NZL: 'nz',
+  PHI: 'ph', POL: 'pl', POR: 'pt', PRK: 'kp', PUR: 'pr',
+  QAT: 'qa', ROC: 'ru', ROU: 'ro', RSA: 'za', RUS: 'ru',
+  SGP: 'sg', SLO: 'si', SUI: 'ch', SVK: 'sk', SWE: 'se',
+  THA: 'th', TKM: 'tm', TPE: 'tw', TUN: 'tn', TUR: 'tr',
+  UAE: 'ae', UKR: 'ua', USA: 'us', UZB: 'uz',
+};
+
+function flagSrc(code, imageUrl) {
+  const explicit = httpUrl(imageUrl);
+  if (explicit) return explicit;
+  const iso = TEAM_ISO2[nonempty(code).toUpperCase()];
+  return iso ? `https://flagcdn.com/${iso}.svg` : '';
+}
+
 function flagMarkup(code, imageUrl, extraClass) {
   if (!imageUrl && !code) return '';
   const cls = extraClass ? `flag-circle ${extraClass}` : 'flag-circle';
-  if (imageUrl) {
-    return `<img class="${cls} flag-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(code)}" />`;
-  }
-  if (code === 'FIN' || code === 'FI') {
-    return `<div class="${cls} flag-fin" aria-label="Finland"></div>`;
-  }
-  if (code === 'USA' || code === 'US') {
-    return `<div class="${cls} flag-usa" aria-label="USA"></div>`;
+  const src = flagSrc(code, imageUrl);
+  if (src) {
+    return `<img class="${cls} flag-img" src="${escapeHtml(src)}" alt="${escapeHtml(code)}" />`;
   }
   return `<div class="${cls} flag-fallback" aria-label="${escapeHtml(code)}">${escapeHtml(code.slice(0, 3))}</div>`;
 }
@@ -208,18 +258,19 @@ function pagerMarkup(pageCount, activePage) {
 
 function avatarMarkup(data) {
   const photo = data.photoUrl
-    ? `<img class="avatar-img" src="${escapeHtml(data.photoUrl)}" alt="${escapeHtml(data.playerName)}" />`
+    ? `<img class="avatar-img" src="${escapeHtml(data.photoUrl)}" alt="" />`
     : `<div class="avatar-fallback">${escapeHtml(initials(data.playerName))}</div>`;
   const flag = flagMarkup(data.playerFlagCode, data.playerFlagUrl, 'player-flag');
   return `<div class="avatar-wrap">${photo}${flag}</div>`;
 }
 
+function statMarkup(label, value) {
+  const shown = nonempty(value) ? value : '\u2013';
+  return `<div class="stat"><span class="stat-label">${escapeHtml(label)}</span><span class="stat-value">${escapeHtml(shown)}</span></div>`;
+}
+
 function metaMarkup(data) {
-  const jersey = data.jerseyNumber ? `#${data.jerseyNumber}` : '';
-  const position = data.positionLabel;
-  if (!jersey && !position) return '';
-  const dot = jersey && position ? '<span class="meta-dot" aria-hidden="true"></span>' : '';
-  return `<div class="meta-line">${jersey ? `<span class="meta-text">${escapeHtml(jersey)}</span>` : ''}${dot}${position ? `<span class="meta-text">${escapeHtml(position)}</span>` : ''}</div>`;
+  return `<div class="stats-row">${statMarkup('Goals', data.goals)}${statMarkup('Assists', data.assists)}${statMarkup('Points', data.points)}</div>`;
 }
 
 export async function renderEnrichment(context) {
@@ -304,10 +355,18 @@ export async function renderEnrichment(context) {
   :host, .overlay-root {
     font-family: IIHF, "IIHF-Std", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  .overlay-root {
-    box-sizing: border-box;
+  :host {
+    display: block;
     width: 100%;
     height: 100%;
+  }
+  .overlay-root {
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -378,6 +437,10 @@ export async function renderEnrichment(context) {
     border-radius: 9999px;
     object-fit: cover;
     display: block;
+    background: #0E2999;
+    color: transparent;
+    font-size: 0;
+    overflow: hidden;
   }
   .avatar-fallback {
     background: #0E2999;
@@ -391,10 +454,11 @@ export async function renderEnrichment(context) {
   .player-flag {
     position: absolute;
     right: -0.125rem;
-    bottom: 0;
+    bottom: -0.0625rem;
     width: 1.25rem;
     height: 1.25rem;
     z-index: 1;
+    border: 1.5px solid #051F4B;
   }
   .player-name {
     color: #ffffff;
@@ -417,35 +481,41 @@ export async function renderEnrichment(context) {
     flex: 0 1 11.5rem;
     min-width: 0;
   }
-  .meta-line {
+  .stats-row {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
+    flex: 1 1 0;
     min-width: 0;
-    min-height: 1rem;
+  }
+  .stat-label {
     color: #C0C1C9;
-    font-size: 0.75rem;
-    font-weight: 400;
+    font-size: 0.6875rem;
+    font-weight: 500;
     line-height: 1rem;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.5px;
   }
-  .meta-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .meta-dot {
-    width: 0.25rem;
-    height: 0.25rem;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.20);
-    flex-shrink: 0;
+  .stat-value {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5rem;
+    letter-spacing: 0.5px;
+    min-height: 1.5rem;
   }
   .vote-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    align-self: stretch;
     gap: 0.25rem;
     height: 2rem;
     padding: 0 1.5rem 0 1rem;
@@ -472,32 +542,25 @@ export async function renderEnrichment(context) {
     cursor: default;
   }
   .flag-circle {
-    width: 1rem;
-    height: 1rem;
+    width: 1.25rem;
+    height: 1.25rem;
     border-radius: 50%;
     overflow: hidden;
-    position: relative;
     flex-shrink: 0;
     background: #f0f0f0;
   }
+  .flag-circle.player-flag {
+    position: absolute;
+    right: -0.125rem;
+    bottom: -0.0625rem;
+    width: 1.25rem;
+    height: 1.25rem;
+  }
   .flag-img {
+    width: 1.25rem;
+    height: 1.25rem;
     object-fit: cover;
     display: block;
-  }
-  .flag-fin {
-    background:
-      linear-gradient(#002F6C, #002F6C) 24% 0 / 27% 100% no-repeat,
-      linear-gradient(#002F6C, #002F6C) 0 36% / 100% 28% no-repeat,
-      #ffffff;
-  }
-  .flag-usa {
-    background:
-      linear-gradient(#192F5D, #192F5D) 0 0 / 40% 54% no-repeat,
-      repeating-linear-gradient(
-        to bottom,
-        #BD3D44 0 12.5%,
-        #ffffff 12.5% 25%
-      );
   }
   .flag-fallback {
     display: flex;
@@ -505,7 +568,7 @@ export async function renderEnrichment(context) {
     justify-content: center;
     background: #0E2999;
     color: #ffffff;
-    font-size: 0.375rem;
+    font-size: 0.5rem;
     font-weight: 700;
     letter-spacing: 0.02em;
   }
