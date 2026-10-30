@@ -350,26 +350,25 @@ export async function renderEnrichment(context) {
     font-family: IIHF, "IIHF-Std", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   :host {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
+    display: block;
     box-sizing: border-box;
     width: 100%;
-    /* Matches bounds.json absoluteHeight. The shadow host otherwise
-       shrinks to the card and sits at the top of that strip. */
-    height: 168px;
+    height: 100%;
     margin: 0;
+    padding: 0;
     background: transparent;
     pointer-events: none;
+    overflow: hidden;
   }
   .overlay-root {
     box-sizing: border-box;
-    position: relative;
     width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     margin: 0;
+    padding: 0;
     color: #ffffff;
     pointer-events: none;
     background: transparent;
@@ -409,11 +408,11 @@ export async function renderEnrichment(context) {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2rem;
-    padding: 1rem;
+    gap: 24px;
+    padding: 12px 16px;
     background: #051F4B;
-    border-top-left-radius: 1rem;
-    border-top-right-radius: 1rem;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
     backdrop-filter: blur(11.5px);
     -webkit-backdrop-filter: blur(11.5px);
   }
@@ -422,19 +421,19 @@ export async function renderEnrichment(context) {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    width: 9rem;
-    flex: 0 0 9rem;
+    gap: 6px;
+    width: 128px;
+    flex: 0 0 128px;
   }
   .avatar-wrap {
     position: relative;
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 56px;
+    height: 56px;
     flex-shrink: 0;
   }
   .avatar-img, .avatar-fallback {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 56px;
+    height: 56px;
     border-radius: 9999px;
     object-fit: cover;
     display: block;
@@ -463,9 +462,9 @@ export async function renderEnrichment(context) {
   }
   .player-name {
     color: #ffffff;
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 500;
-    line-height: 1.25rem;
+    line-height: 18px;
     letter-spacing: 0.1px;
     text-align: center;
     width: 100%;
@@ -478,40 +477,40 @@ export async function renderEnrichment(context) {
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
-    gap: 0.5rem;
-    flex: 0 1 11.5rem;
+    gap: 8px;
+    flex: 0 1 168px;
     min-width: 0;
   }
   .position-label {
     color: #ffffff;
-    font-size: 1rem;
+    font-size: 16px;
     font-weight: 500;
-    line-height: 1.5rem;
+    line-height: 22px;
     letter-spacing: 0.5px;
     text-align: center;
-    min-height: 1.5rem;
+    min-height: 22px;
   }
   .vote-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     align-self: stretch;
-    gap: 0.25rem;
-    height: 2rem;
-    padding: 0 1.5rem 0 1rem;
+    gap: 4px;
+    height: 36px;
+    padding: 0 16px 0 12px;
     border: 0;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     background: #ffffff;
     color: #051F4B;
-    font-size: 0.875rem;
+    font-size: 14px;
     font-weight: 500;
-    line-height: 1.25rem;
+    line-height: 18px;
     letter-spacing: 0.1px;
     cursor: pointer;
   }
   .vote-btn svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
   }
   .vote-btn.is-voted {
