@@ -189,9 +189,6 @@ function readContext(context) {
     jerseyNumber: field('jerseyNumber').replace(/^#/, ''),
     positionLabel: positionLabel(field('position')),
     playerFlagUrl: httpUrl(field('playerFlagUrl')),
-    goals: field('goals'),
-    assists: field('assists'),
-    points: field('points'),
     playerFlagCode: (field('teamCode') || field('playerFlagCode')).toUpperCase(),
     fontUrl: httpUrl(field('fontUrl')),
     pageCount,
@@ -264,13 +261,10 @@ function avatarMarkup(data) {
   return `<div class="avatar-wrap">${photo}${flag}</div>`;
 }
 
-function statMarkup(label, value) {
-  const shown = nonempty(value) ? value : '\u2013';
-  return `<div class="stat"><span class="stat-label">${escapeHtml(label)}</span><span class="stat-value">${escapeHtml(shown)}</span></div>`;
-}
-
 function metaMarkup(data) {
-  return `<div class="stats-row">${statMarkup('Goals', data.goals)}${statMarkup('Assists', data.assists)}${statMarkup('Points', data.points)}</div>`;
+  const position = nonempty(data.positionLabel);
+  if (!position) return '';
+  return `<div class="position-label">${escapeHtml(position)}</div>`;
 }
 
 export async function renderEnrichment(context) {
@@ -357,12 +351,11 @@ export async function renderEnrichment(context) {
   }
   :host {
     display: block;
-    width: 100%;
-    height: 100%;
+    background: transparent;
   }
   .overlay-root {
     box-sizing: border-box;
-    position: absolute;
+    position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
@@ -372,6 +365,7 @@ export async function renderEnrichment(context) {
     justify-content: flex-end;
     color: #ffffff;
     pointer-events: none;
+    background: transparent;
   }
   .overlay-root *, .overlay-root *::before, .overlay-root *::after {
     box-sizing: border-box;
@@ -481,34 +475,13 @@ export async function renderEnrichment(context) {
     flex: 0 1 11.5rem;
     min-width: 0;
   }
-  .stats-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-  .stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    flex: 1 1 0;
-    min-width: 0;
-  }
-  .stat-label {
-    color: #C0C1C9;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1rem;
-    letter-spacing: 0.5px;
-  }
-  .stat-value {
+  .position-label {
     color: #ffffff;
     font-size: 1rem;
-    font-weight: 400;
+    font-weight: 500;
     line-height: 1.5rem;
     letter-spacing: 0.5px;
+    text-align: center;
     min-height: 1.5rem;
   }
   .vote-btn {
