@@ -193,7 +193,15 @@ function readContext(context) {
     fontUrl: httpUrl(field('fontUrl')),
     pageCount,
     activePage,
+    hasVoted: alreadyVoted(user),
   };
+}
+
+function alreadyVoted(user) {
+  if (!user || typeof user !== 'object') return false;
+  const flag = nonempty(user.hasVoted).toLowerCase();
+  if (flag === 'true' || flag === '1' || flag === 'yes') return true;
+  return nonempty(user.myVotePlayerId) !== '';
 }
 
 // IIHF team codes are not all ISO alpha-2. flagcdn serves the circular crop.
@@ -267,11 +275,44 @@ function metaMarkup(data) {
   return `<div class="position-label">${escapeHtml(position)}</div>`;
 }
 
+function voteButtonMarkup(hasVoted) {
+  const votedAttrs = hasVoted ? ' class="vote-btn is-voted" disabled' : ' class="vote-btn"';
+  const label = hasVoted ? 'Voted' : 'Vote';
+  return `<button id="iihf-vote-btn"${votedAttrs} type="button">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 21H18.2C18.83 21 19.4 20.63 19.68 20.06L22.78 12.95C22.93 12.63 23 12.32 23 12V10C23 8.9 22.1 8 21 8H14.69L15.64 3.43L15.67 3.11C15.67 2.7 15.5 2.32 15.23 2.05L14.17 1L7.59 7.59C7.22 7.95 7 8.45 7 9V19C7 20.1 7.9 21 9 21ZM9 9L13.34 4.66L12 10H21V12L18.2 19H9V9ZM1 9H5V21H1V9Z" fill="currentColor"/>
+        </svg>
+        <span class="vote-label">${label}</span>
+      </button>`;
+}
+
 export async function renderEnrichment(context) {
   const data = readContext(context);
   const userContext = data.user;
 
+  window.iihfStoryOverlay_markVoted = function iihfStoryOverlay_markVoted() {
+    const root = window.clientDocument;
+    if (!root) {
+      return;
+    }
+    const button = root.getElementById('iihf-vote-btn');
+    if (!button) {
+      return;
+    }
+    button.disabled = true;
+    button.classList.add('is-voted');
+    const label = button.querySelector('.vote-label');
+    if (label) {
+      label.textContent = 'Voted';
+    }
+  };
+
   window.iihfStoryOverlay_onVote = function iihfStoryOverlay_onVote() {
+    if (data.hasVoted) {
+      window.iihfStoryOverlay_markVoted();
+      return;
+    }
+
     // The native SDK parses setAppContext as Map<String, String> (Gson) and then
     // replaces hostingAppContext with it. Nested objects/arrays/booleans make
     // parsing fail silently, so every value must be a string. The vote is sent
@@ -285,6 +326,10 @@ export async function renderEnrichment(context) {
       payload[key] =
         typeof value === 'object' ? JSON.stringify(value) : String(value);
     });
+    payload.hasVoted = 'true';
+    if (data.pollPlayerId || data.sdk.playerId) {
+      payload.myVotePlayerId = String(data.pollPlayerId || data.sdk.playerId);
+    }
     payload.iihfVote = JSON.stringify({
       action: 'vote',
       playerId: data.pollPlayerId || data.sdk.playerId,
@@ -300,19 +345,8 @@ export async function renderEnrichment(context) {
       window.triggerExternalFunction('setAppContext', payload);
     }
 
-    const root = window.clientDocument;
-    if (!root) {
-      return;
-    }
-    const button = root.getElementById('iihf-vote-btn');
-    if (button) {
-      button.disabled = true;
-      button.classList.add('is-voted');
-      const label = button.querySelector('.vote-label');
-      if (label) {
-        label.textContent = 'Voted';
-      }
-    }
+    data.hasVoted = true;
+    window.iihfStoryOverlay_markVoted();
   };
 
   window.iihfStoryOverlay_bind = function iihfStoryOverlay_bind() {
@@ -322,13 +356,18 @@ export async function renderEnrichment(context) {
     }
 
     const button = root.getElementById('iihf-vote-btn');
-    if (button) {
-      button.addEventListener('click', function onVoteClick(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        window.iihfStoryOverlay_onVote();
-      });
+    if (!button) {
+      return;
     }
+    if (data.hasVoted || button.disabled) {
+      window.iihfStoryOverlay_markVoted();
+      return;
+    }
+    button.addEventListener('click', function onVoteClick(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.iihfStoryOverlay_onVote();
+    });
   };
 
   const fontLoader = data.fontUrl
@@ -561,12 +600,7 @@ export async function renderEnrichment(context) {
     </div>
     <div class="player-meta">
       ${metaMarkup(data)}
-      <button id="iihf-vote-btn" class="vote-btn" type="button">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M9 21H18.2C18.83 21 19.4 20.63 19.68 20.06L22.78 12.95C22.93 12.63 23 12.32 23 12V10C23 8.9 22.1 8 21 8H14.69L15.64 3.43L15.67 3.11C15.67 2.7 15.5 2.32 15.23 2.05L14.17 1L7.59 7.59C7.22 7.95 7 8.45 7 9V19C7 20.1 7.9 21 9 21ZM9 9L13.34 4.66L12 10H21V12L18.2 19H9V9ZM1 9H5V21H1V9Z" fill="currentColor"/>
-        </svg>
-        <span class="vote-label">Vote</span>
-      </button>
+      ${voteButtonMarkup(data.hasVoted)}
     </div>
   </div>
 </div>
