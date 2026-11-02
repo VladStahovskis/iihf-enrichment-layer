@@ -397,9 +397,7 @@ export async function renderEnrichment(context) {
     padding: 0;
     background: transparent;
     pointer-events: none;
-    /* Allow the card to paint into the home-indicator inset when bounds
-       extend past the player bottom (see bounds.json yOffset). */
-    overflow: visible;
+    overflow: hidden;
   }
   .overlay-root {
     box-sizing: border-box;
@@ -450,14 +448,10 @@ export async function renderEnrichment(context) {
     align-items: center;
     justify-content: center;
     gap: 24px;
-    /* Extra bottom padding fills the home-indicator area so the blue
-       sheet reaches the screen edge while controls stay above it. */
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 34px));
+    padding: 12px 16px;
     background: #051F4B;
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
     backdrop-filter: blur(11.5px);
     -webkit-backdrop-filter: blur(11.5px);
   }
