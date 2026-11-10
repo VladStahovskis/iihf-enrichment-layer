@@ -396,8 +396,7 @@ export async function renderEnrichment(context) {
     margin: 0;
     padding: 0;
     background: transparent;
-    /* Diagnostic: the whole slot claims taps. Vote should not turn the page. */
-    pointer-events: auto;
+    pointer-events: none;
     overflow: hidden;
   }
   .overlay-root {
@@ -408,9 +407,9 @@ export async function renderEnrichment(context) {
     flex-direction: column;
     justify-content: flex-end;
     margin: 0;
-    padding: 0;
+    padding: 0 0 100px;
     color: #ffffff;
-    pointer-events: auto;
+    pointer-events: none;
     background: transparent;
   }
   .overlay-root *, .overlay-root *::before, .overlay-root *::after {
